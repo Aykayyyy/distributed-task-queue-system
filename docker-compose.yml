@@ -1,0 +1,66 @@
+services:
+  rabbitmq:
+    image: rabbitmq:3-management
+    container_name: dtq_rabbitmq
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+
+  redis:
+    image: redis:7
+    container_name: dtq_redis
+    ports:
+      - "6379:6379"
+
+  db:
+    image: postgres:15
+    container_name: dtq_postgres
+    environment:
+      POSTGRES_USER: dtq
+      POSTGRES_PASSWORD: dtqpass
+      POSTGRES_DB: dtqdb
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U dtq -d dtqdb"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  api:
+    build: ./api
+    container_name: dtq_api
+    ports:
+      - "8000:8000"
+    environment:
+      RABBITMQ_URL: amqp://guest:guest@rabbitmq:5672/
+      REDIS_HOST: redis
+      DB_HOST: db
+      DB_USER: dtq
+      DB_PASSWORD: dtqpass
+      DB_NAME: dtqdb
+    depends_on:
+      db:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_started
+      redis:
+        condition: service_started
+
+  worker:
+    build: ./worker
+    container_name: dtq_worker
+    environment:
+      RABBITMQ_URL: amqp://guest:guest@rabbitmq:5672/
+      REDIS_HOST: redis
+      DB_HOST: db
+      DB_USER: dtq
+      DB_PASSWORD: dtqpass
+      DB_NAME: dtqdb
+    depends_on:
+      db:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_started
+      redis:
+        condition: service_started
